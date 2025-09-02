@@ -8,7 +8,7 @@ reg [2:0] baud_sel = 3'b001;  // Keep constant
 reg [7:0] data = 0;
 wire ready;
 wire tx;
-
+wire busy;
 // DUT
 test_tx uut(
     .clk(clk),
@@ -17,7 +17,9 @@ test_tx uut(
     .baud_sel(baud_sel),
     .data(data),
     .ready(ready),
-    .tx(tx)
+    .tx(tx),
+    .busy(busy)
+    
 );
 
 // Clock - 50MHz

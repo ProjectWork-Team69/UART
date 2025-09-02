@@ -7,7 +7,8 @@ module test_tx (
     input baud_sel, // Baud rate select: 0 -> 115200, 1 -> 9600,2 2 -> 4800,3 2400
     input [7:0] data, // 1 Byte Input Data
     output reg ready, // Signal to notify tx is ready
-    output reg tx  // Serial Output
+    output reg tx,  // Serial Output
+    output reg busy
 );
 
 
@@ -60,6 +61,7 @@ parameter IDLE = 2'b00,
             ready <= 1'b1;
             bit_index <= 0;
             count <= 0;
+            busy<=0;
         end 
         else begin
             case (state)
@@ -69,10 +71,12 @@ parameter IDLE = 2'b00,
                     bit_index <= 0;
                     count <= 0;
                     transmit_data <= 0;
+                    busy<=0;
                 end
                 START: begin
                     tx <= 0;
                     ready <= 0;
+                    busy<=1;
 
                     transmit_data <= data;
                 end 
@@ -86,6 +90,7 @@ parameter IDLE = 2'b00,
                 end
                 STOP: begin
                     tx <= 1'b1;
+                    busy<=0;
 
                 end
                 default : begin
