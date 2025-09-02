@@ -1,12 +1,10 @@
-`timescale 1ns/1ps
-
 
 module tb_uart;
 
 reg clk = 0;
 reg rst_n = 0;
 reg start = 0;
-reg [2:0] baud_sel = 3'b00;  // Keep constant
+reg [2:0] baud_sel = 3'b001;  // Keep constant
 reg [7:0] data = 0;
 wire ready;
 wire tx;
@@ -34,28 +32,19 @@ initial begin
     data = 8'h55;
     start = 1;
     #20 start = 0;
-    
-    // Wait for ready
-    while(!ready) #20;
-    #1000;
-    
-    // Send 0xAA  
-    data = 8'hAA;
+    #70000
+    data = 8'haa;
     start = 1;
+    baud_sel = 3'b010;
     #20 start = 0;
-    
-    // Wait for ready
-    while(!ready) #20;
-    #1000;
-    
-    // Send 0xFF
-    data = 8'hFF;
+    #70000
+    data = 8'hef;
     start = 1;
+    baud_sel = 3'b011;
     #20 start = 0;
-    
-    // Wait for ready
-    while(!ready) #20;
-    #1000;
+        
+
+    #100000;
     
     $display("Test complete");
     $finish;
