@@ -28,7 +28,7 @@ TOPLEVEL = uart_axil_wrap     # wrapper module that instantiates uart_axil_wrap
 MODULE   = slave            # your python testbench module
 
 # Verilog sources
-VERILOG_SOURCES += uart_axil_wrap.v
+VERILOG_SOURCES += ../../src/uart_axil_wrap.v
 
 
 
