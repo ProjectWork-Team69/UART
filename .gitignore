@@ -5,3 +5,4 @@ results.xml
 makefiles/
 .env/
 build/
+*.vcd

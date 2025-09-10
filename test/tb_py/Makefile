@@ -24,11 +24,11 @@ COCOTB_HDL_TIMEPRECISION = 1ps
 
 # DUT / top-level module
 DUT      = uart_axil_wrap
-TOPLEVEL = uart_axil_wrap     # wrapper module that instantiates uart_axil_wrap
+TOPLEVEL = wrapper     # wrapper module that instantiates uart_axil_wrap
 MODULE   = slave            # your python testbench module
 
 # Verilog sources
-VERILOG_SOURCES += ../../src/uart_axil_wrap.v
+VERILOG_SOURCES += ../../src/uart_axil_wrap.v ./wrapper.v
 
 
 
