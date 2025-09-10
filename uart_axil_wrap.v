@@ -44,6 +44,12 @@ localparam ADDR_RX_DATA = 32'h0000_0004;
 localparam ADDR_STATUS  = 32'h0000_0008;
 localparam ADDR_BAUD_SEL = 32'h0000_000C;
 
+//localparam ADDR_CONTROL=32'h
+//#localparam ADDR_INT_ENABLE=
+//#localparam ADDR_INT_EN=
+//#localparam FIFO_CTRL=
+
+
 // Write FSM States
 localparam [1:0] STATE_IDLE_WR = 2'd0,
                  STATE_DATA_WR = 2'd1,
