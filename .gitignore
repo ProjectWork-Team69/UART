@@ -4,3 +4,4 @@ sim_build/
 results.xml
 makefiles/
 .env/
+build/
