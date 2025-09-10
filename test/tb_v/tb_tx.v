@@ -53,4 +53,9 @@ start = 1; #20; start = 0;
     $finish;
 end
 
+initial begin
+    $dumpfile("tb_tx.vcd");
+    $dumpvars(0, tb_tx);
+end
+
 endmodule

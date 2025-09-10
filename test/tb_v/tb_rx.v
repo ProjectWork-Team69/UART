@@ -116,4 +116,9 @@ module tb_rx();
         #1000;
         $finish;
     end
+
+    initial begin
+        $dumpfile("tb_rx.vcd");
+        $dumpvars(0, tb_rx);
+    end
 endmodule
