@@ -1,16 +1,3 @@
-#SIM ?= icarus
-#TOPLEVEL_LANG ?= verilog
-#VERILOG_SOURCES = uart_axil_wrap.v dump_wrap.v
-#TOPLEVEL = dump_wrap
-#MODULE = slave
-#WAVES ?= 1   # optional, helps Cocotb pick up VCD
-#nclude Makefile.sim
-
-
-
-
-
-
 # UART Cocotb Makefile
 # Adapted from Alex Forencich template
 
@@ -53,9 +40,15 @@ else ifeq ($(SIM), verilator)
 endif
 
 # include Cocotb standard Makefile
-include Makefile.sim
+# include Makefile.sim
+# include cocotb's make rules to take care of the simulator setup
+include $(shell cocotb-config --makefiles)/Makefile.sim
 
 # Clean extra files
 clean::
-	@rm -rf dump.vcd
+	@rm -rf __pycache__
+	@rm -rf *.vcd *.fst
+	@rm -rf *.o *.out *.vvp
+	@rm -rf sim_build
+	@rm -rf results.xml
 
