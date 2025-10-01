@@ -257,6 +257,20 @@ always @(posedge clk) begin
         end
     end
 end
+    /////////////////////////////////////////////////////////////////
+    // INSTANTIATE THE UART CORE MODULES
+    /////////////////////////////////////////////////////////////////
+
+//	 module test_tx (
+//    input clk, // 50 MHz
+//    input rst_n,
+//    input start, // Initiate tx
+//    input baud_sel, // Baud rate select: 0 -> 115200, 1 -> 9600,2 2 -> 4800,3 2400
+//    input [7:0] data, // 1 Byte Input Data
+//    output reg ready, // Signal to notify tx is ready
+//    output reg tx , // Serial Output
+//    output reg busy
+//);
 
 
 endmodule
