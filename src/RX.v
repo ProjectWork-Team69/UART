@@ -67,7 +67,8 @@ module RX(
     wire rx_negedge = rx_sync2 & ~rx_d1;
     wire calc_even_parity;
     wire calc_odd_parity;
-    
+    wire rx_wire = rx_en ? rx_in : 1'b1; // if rx_en is low, force rx to be high
+
     // Logic for updating registers at 50Mhz 
     
     // parity error and frame error can be detected in the FSM 
@@ -149,9 +150,9 @@ module RX(
                 samples <= 3'b0;
             else begin
                 case (sample_counter)
-                    4'b0111 : samples <= {samples[2:1], rx};
-                    4'b1000 : samples <= {samples[2], rx, samples[0]};
-                    4'b0111 : samples <= {rx, samples[1:0]};
+                    4'b0111 : samples <= {samples[2:1], rx_wire};
+                    4'b1000 : samples <= {samples[2], rx_wire, samples[0]};
+                    4'b0111 : samples <= {rx_wire, samples[1:0]};
                     default: samples <= samples;
                 endcase
             end
@@ -176,7 +177,7 @@ module RX(
             rx_d1    <= 1'b1;
         end
         else begin
-            rx_sync1 <= rx;      // First FF for metastability
+            rx_sync1 <= rx_wire;      // First FF for metastability
             rx_sync2 <= rx_sync1; // Second FF 
             rx_d1    <= rx_sync2; // For edge detection
         end
