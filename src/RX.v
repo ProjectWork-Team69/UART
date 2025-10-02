@@ -27,14 +27,16 @@ module RX(
     input wire          stop_bit,
     input wire [15:0]   rx_divisor, // for overampling at 16 times baud clock
     input wire          rx,
+    input wire          rx_data_read, // signal to indicate that the data has been read
     
     // Signals for over run error 
     input wire          fifo_en,
     input wire          fifo_full,
     
     output reg          rx_success, // goes high for 1 clk cycle when a byte is received
-    output reg [7:0]    rx_data,
+    output reg [8:0]    rx_data, // can be 5 - 9 bits of data
     output reg          rx_idle,
+    output reg          rx_done,
     output reg [2:0]    error 
     );
     
@@ -50,16 +52,21 @@ module RX(
     reg [2:0]   state;
     reg [3:0]   no_bits; // this reg is storing the no. of bits, only gets updateed when RX is idle 
     reg         rx_bit;
-    reg [15:0]  counter;
-    reg [3:0]   sample_counter;
+    // Baud rate clock divider - counts down from (rx_divisor/16)-1 to 0
+    // Generates 16 sample points per UART bit period for oversampling
+    reg [15:0]  counter; 
+    reg [3:0]   sample_counter; // Tracks position within 16-sample oversampling window
     reg [2:0]   samples; // 3 samples to be registered in the middle at 7th, 6th and 9th sample count
     reg         rx_in; // Taking majority and using as value of RX
     reg         rx_sync1, rx_sync2, rx_d1; // Edge detector registers
-    reg [3:0]   fsm_counter;
+    reg [3:0]   frame_counter;    // countes the frame bits
     reg [3:0]   frame_size;
-    reg [3:0]   bit_counter;
+    reg [10:0]  temp_frame; // temp frame to store start, data, parity and no stop bits
+    reg         parity_error;
     
     wire rx_negedge = rx_sync2 & ~rx_d1;
+    wire calc_even_parity;
+    wire calc_odd_parity;
     
     // Logic for updating registers at 50Mhz 
     
@@ -101,11 +108,11 @@ module RX(
         end
         else begin
             if (counter == 16'b0) begin
-                counter <= (rx_divisor/16'd16) - 16'b1;
-                if (sample_counter >= 4'b0)
-                    sample_counter <= 4'b1111; 
+                counter <= (rx_divisor >> 4) - 16'b1;
+                if (sample_counter >= 4'b1111)
+                    sample_counter <= 4'b0; 
                 else
-                    sample_counter <= sample_counter - 4'b1;
+                    sample_counter <= sample_counter + 4'b1;
             end else begin
                 counter <= counter - 16'b1;
             end
@@ -118,15 +125,15 @@ module RX(
     // - should do (frame + 1 start bit + parity + 1 or 2 stop bit) times
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            fsm_counter <= 4'b0;
+            frame_counter <= 4'b0;
         end
         else begin
             if (cur_state == IDLE && rx_negedge) 
-                fsm_counter <= 4'b0;
+                frame_counter <= 4'b0;
             else if (sample_counter == 4'b0000) 
-                fsm_counter <= fsm_counter + 4'b1;
+                frame_counter <= frame_counter + 4'b1;
             else 
-                fsm_counter <= fsm_counter;
+                frame_counter <= frame_counter;
         end
     end
     
@@ -180,93 +187,105 @@ module RX(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= IDLE;
-            count <= 0;
-            bit_index <= 0;
-            valid <= 0;
-            recieved_data <= 0;
+            rx_done <= 1'b0;
+            rx_success <= 1'b0;
+            temp_frame <= 12'b0;
+            error <= 3'b0;
+            rx_idle <= 1'b1;
         end
         else begin
-            valid <= 0; // Pulse valid for one clock only
-            
             case (state)
                 IDLE: begin
-                    bit_index <= 0;
-                    count <= 0;
                     if (rx_negedge) begin
                         state <= START;
-                        count <= 1'b1;
+                        rx_idle <= 1'b0;
                     end
+                    else begin
+                        state <= IDLE;
+                        rx_idle <= 1'b1;
+                    end
+                    rx_done <= 1'b0;
+                    rx_success <= 1'b0;
+                    temp_frame <= 12'b0;
+                    error <= 3'b0;
+
                 end
                 
                 START: begin
-                    count <= count + 1'b1;
-                    
-                    if (count == (rx_divisor >> 2)) begin // Check if start bit is still valid at middle sample
+                    if (sample_counter == 4'b1000) begin // Check if start bit is still valid at middle sample
                         if (rx == 1) state <= IDLE;
                     end
-                    else if (count >= rx_divisor - 1) begin
+                    else if (sample_counter >= 4'b1111) begin
                         state <= DATA_BITS;
-                        count <= 0;
                     end
-                    else begin
-                        state <= state;
-                    end 
+                    temp_frame[0] <= rx_in; // Store start bit
                 end
                 
                 DATA_BITS: begin
-                    count <= count + 1;
-                    
-                    if (count == (rx_divisor >> 2))
-                        recieved_data[bit_index] <= rx_in; // taking majority of 3 input from rx_in
-                    
-                    if (count >= rx_divisor - 1) begin
-                        count <= 0;
-                        if (bit_index < no_bits - 1)
-                            bit_index <= bit_index + 1;
-                        else begin
-                            state <= (^parity) ? PARITY : STOP;
-                            bit_index <= 0;
-                        end
+                    if (frame_counter <= no_bits) begin
+                        temp_frame[frame_counter] <= rx_in; // Store data bits
+                    end
+                    if (frame_counter == no_bits && sample_counter == 4'b1111) begin
+                        state <= (^parity) ? PARITY : STOP; // Move to PARITY or STOP based on config
                     end
                 end
 
                 PARITY: begin
-                    count <= count + 1;
-                    
-                    if (count == (rx_divisor >> 2)) begin
-                        // if 01 odd parity else 10 even parity
-                        if (parity == 2'b01) begin
-                            if (^recieved_data == rx_in) // odd parity check
-                                error[1] <= 1'b0;
-                            else
-                                error[1] <= 1'b1;
-                        end
-                        else if (parity == 2'b10) begin
-                            if (~^recieved_data == rx_in) // even parity check
-                                error[1] <= 1'b0;
-                            else
-                                error[1] <= 1'b1;
-                        end
-                        else begin
-                            error[1] <= 1'b0;
-                        end
-                    end
-                    
-                    if (count >= rx_divisor - 1) begin
-                        state <= STOP;
-                        count <= 0;
-                    end
+                    temp_frame[frame_counter] <= rx_in; // Store parity bit
+                    state <= (sample_counter == 4'b1111) ? STOP : PARITY; // Move to STOP after parity bit
                 end
                 
                 STOP: begin
-                    count <= count + 1;
-                    
-                    // Handling frame error and changing state to idle 
-                    // if stop_bit is 1 then 2 stop bits are expected else 1 stop bit is expected
-                    
+                    if (frame_counter == (frame_size - 4'b1) && sample_counter == 4'b1111) begin
+                        state <= IDLE;
+                        rx_done <= 1'b1;
+                        rx_success <= ~parity_error; // Pulse for one clk cycle
+                        
+                        // Overrun error check
+                        if (fifo_en) begin
+                            error[0] <= fifo_full; // Overrun error
+                        end
+                        else begin
+                            error[0] <= (rx_data_read) ? 1'b0 : 1'b1; // Overrun error
+                        end
+                    end
+                    else
+                        state <= STOP;
+
+                    // Frame error check
+                    if (rx_in != 1'b1) 
+                        error[2] <= 1'b1; // Frame error
+                    else 
+                        error[2] <= 1'b0;
+                end
+                default: begin
+                    state <= IDLE;
+                    rx_done <= 1'b0;
+                    rx_success <= 1'b0;
+                    temp_frame <= 12'b0;
+                    error <= 3'b0;
+                    rx_idle <= 1'b1;
                 end
             endcase
         end
+    end
+
+    // Parity calculation for both modes
+    calc_even_parity = ^temp_frame[no_bits:1];  // Even: XOR of all bits
+    calc_odd_parity = ~calc_even_parity;   // Odd: NOT of even parity
+
+    // Check parity based on configuration
+    always @(*) begin
+        case (parity_mode)
+            2'b00: parity_error = 1'b0;                              // No parity
+            2'b01: parity_error = (temp_frame[no_bits + 4'b1] != calc_odd_parity); // Odd parity
+            2'b10: parity_error = (temp_frame[no_bits + 4'b1] != calc_even_parity);// Even parity
+            default: parity_error = 1'b0;
+        endcase
+        // take only the required bits from temp_frame
+        // temp_frame[0] = start bit
+        // temp_frame[no_bits:1] = data bits
+        rx_data = temp_frame[no_bits:1];
     end
     
 endmodule
