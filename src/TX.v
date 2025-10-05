@@ -30,12 +30,13 @@ module TX(
               STOP = 3'b100;
 
     // registers
-    reg [1:0] state, next_state; // state register
+    reg [2:0] state, next_state; // state register
     reg [8:0] temp_frame; // stores 
     reg [3:0] no_bits;
     reg       stop_bit_copy; // copy of stop_bit
     reg [1:0] parity_copy; // copy of parity
     reg       parity_bit; // calulated parity
+    reg [3:0] bit_index; // keep track of bit count to switch state
 
     assign no_data = fifo_en & fifo_empty;
 
@@ -89,7 +90,7 @@ module TX(
         if (!rst_n) 
             temp_frame <= 9'b0;
         else 
-            temp_frame <= (cur_state == IDLE) ? tx_data : temp_frame;
+            temp_frame <= (state == IDLE) ? tx_data : temp_frame;
     end
 
     // state FSM logic
@@ -106,12 +107,12 @@ module TX(
             IDLE:      
                 next_state = ((start && tx_en) || no_data) ? START : IDLE;
             START:     
-                next_state = DATA_BITS;
-            DATA_BITS: begin
+                next_state = DATA_BIT;
+            DATA_BIT: begin
                 if (bit_index == no_bits - 1)
                     next_state = (^parity_copy) ? PARITY : STOP;
                 else
-                    next_state = DATA_BITS;
+                    next_state = DATA_BIT;
             end
             PARITY:
                 next_state = STOP;
@@ -121,7 +122,6 @@ module TX(
                 // if stop_bit is 1 then stay for one more cycle (2 cycles in total)
                 if (stop_bit_copy) begin
                     next_state = STOP;
-                    stop_bit_copy = 1'b0; // reset the copy
                 end else begin
                     next_state = IDLE;
                 end
@@ -137,6 +137,7 @@ module TX(
             tx <= 1'b1;
             tx_done <= 0;
             tx_idle <= 1;
+            bit_index <= 4'b0;
         end 
         else begin
             case (state)
@@ -144,17 +145,19 @@ module TX(
                    tx <= 1'b1;
                    tx_done <= 0;
                    tx_idle <= 1;
+                   bit_index <= 4'b0;
                 end
                 START: begin
                    tx <= 1'b0;
                    tx_done <= 0;
                    tx_idle <= 0;
+                   bit_index <= 4'b0;
                 end 
-                DATA_BITS: begin
-                    tx <= temp_frame[0];
-                    temp_frame <= {1'b0, temp_frame[8:1]}; // shift right
+                DATA_BIT: begin
+                    tx <= temp_frame[bit_index];
                     tx_done <= 0;
                     tx_idle <= 0;
+                    bit_index <= (bit_index <= no_bits - 4'b1) ? bit_index + 4'b1 : 4'b0;
                 end
                 PARITY: begin
                     case(parity_copy)

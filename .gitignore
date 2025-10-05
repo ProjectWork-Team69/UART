@@ -6,3 +6,4 @@ makefiles/
 .env/
 build/
 *.vcd
+.nvim/
