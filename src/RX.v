@@ -63,7 +63,8 @@ module RX(
     reg [3:0]   frame_size;
     reg [10:0]  temp_frame; // temp frame to store start, data, parity and no stop bits
     reg         parity_error;
-    
+    reg [1:0]   parity_mode;
+
     wire rx_negedge = rx_sync2 & ~rx_d1;
     wire calc_even_parity;
     wire calc_odd_parity;
@@ -82,6 +83,7 @@ module RX(
         if (!rst_n) 
             no_bits <= 4'b1000;
             frame_size <= 4'b1010; // 8 data bits + 1 start + 1 stop
+            parity_mode <= 2'b00;
         else 
             if (cur_state == IDLE) begin
                 case (data_bits)
@@ -94,9 +96,11 @@ module RX(
                 endcase
                 frame_size <= no_bits + 4'b0001 + (^parity) + 4'b0001 + stop_bit; // Updated frame size
             end
+            parity_mode <= parity;
             else begin
                 no_bits <= no_bits;
                 frame_size <= frame_size;
+                parity_mode <= parity_mode;
             end
     end
 
@@ -227,7 +231,7 @@ module RX(
                         temp_frame[frame_counter] <= rx_in; // Store data bits
                     end
                     if (frame_counter == no_bits && sample_counter == 4'b1111) begin
-                        state <= (^parity) ? PARITY : STOP; // Move to PARITY or STOP based on config
+                        state <= (^parity_mode) ? PARITY : STOP; // Move to PARITY or STOP based on config
                     end
                 end
 
@@ -286,7 +290,14 @@ module RX(
         // take only the required bits from temp_frame
         // temp_frame[0] = start bit
         // temp_frame[no_bits:1] = data bits
-        rx_data = temp_frame[no_bits:1];
+        case (no_bits)
+            4'b0101 : rx_data = temp_frame[5:1];
+            4'b0110 : rx_data = temp_frame[6:1];
+            4'b0111 : rx_data = temp_frame[7:1];
+            4'b1000 : rx_data = temp_frame[8:1];
+            4'b1001 : rx_data = temp_frame[9:1];
+            default: rx_data = temp_frame[8:1];
+        endcase
     end
     
 endmodule
