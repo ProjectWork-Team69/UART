@@ -51,7 +51,7 @@ module RX(
     // Interal Register
     reg [2:0]   state;
     reg [3:0]   no_bits; // this reg is storing the no. of bits, only gets updateed when RX is idle 
-    reg         rx_bit;
+    
     // Baud rate clock divider - counts down from (rx_divisor/16)-1 to 0
     // Generates 16 sample points per UART bit period for oversampling
     reg [15:0]  counter; 
@@ -66,8 +66,7 @@ module RX(
     reg [1:0]   parity_mode;
 
     wire rx_negedge = rx_sync2 & ~rx_d1;
-    wire calc_even_parity;
-    wire calc_odd_parity;
+    reg calc_even_parity, calc_odd_parity;
     wire rx_wire = rx_en ? rx_in : 1'b1; // if rx_en is low, force rx to be high
 
     // Logic for updating registers at 50Mhz 
@@ -80,12 +79,13 @@ module RX(
     
     // update no. of bits anf frame size, only gets updateed when RX is idle 
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) 
+        if (!rst_n) begin
             no_bits <= 4'b1000;
             frame_size <= 4'b1010; // 8 data bits + 1 start + 1 stop
             parity_mode <= 2'b00;
-        else 
-            if (cur_state == IDLE) begin
+        end
+        else begin
+            if (state == IDLE) begin
                 case (data_bits)
                     3'b000 : no_bits <= 4'b0101;
                     3'b001 : no_bits <= 4'b0110;
@@ -95,13 +95,14 @@ module RX(
                     default: no_bits <= 4'b1000;
                 endcase
                 frame_size <= no_bits + 4'b0001 + (^parity) + 4'b0001 + stop_bit; // Updated frame size
+                parity_mode <= parity;
             end
-            parity_mode <= parity;
             else begin
                 no_bits <= no_bits;
                 frame_size <= frame_size;
                 parity_mode <= parity_mode;
             end
+        end
     end
 
     // Logic to oversample input and take majority
@@ -133,7 +134,7 @@ module RX(
             frame_counter <= 4'b0;
         end
         else begin
-            if (cur_state == IDLE && rx_negedge) 
+            if (state == IDLE && rx_negedge) 
                 frame_counter <= 4'b0;
             else if (sample_counter == 4'b0000) 
                 frame_counter <= frame_counter + 4'b1;
@@ -156,7 +157,7 @@ module RX(
                 case (sample_counter)
                     4'b0111 : samples <= {samples[2:1], rx_wire};
                     4'b1000 : samples <= {samples[2], rx_wire, samples[0]};
-                    4'b0111 : samples <= {rx_wire, samples[1:0]};
+                    4'b1001 : samples <= {rx_wire, samples[1:0]};
                     default: samples <= samples;
                 endcase
             end
@@ -221,12 +222,12 @@ module RX(
                         if (rx == 1) state <= IDLE;
                     end
                     else if (sample_counter >= 4'b1111) begin
-                        state <= DATA_BITS;
+                        state <= DATA_BIT;
                     end
                     temp_frame[0] <= rx_in; // Store start bit
                 end
                 
-                DATA_BITS: begin
+                DATA_BIT: begin
                     if (frame_counter <= no_bits) begin
                         temp_frame[frame_counter] <= rx_in; // Store data bits
                     end
@@ -276,8 +277,18 @@ module RX(
     end
 
     // Parity calculation for both modes
-    calc_even_parity = ^temp_frame[no_bits:1];  // Even: XOR of all bits
-    calc_odd_parity = ~calc_even_parity;   // Odd: NOT of even parity
+    always @(*) begin
+        case (no_bits)
+            4'b0101: calc_even_parity = ^temp_frame[5:1];  // Even: XOR of all bits
+            4'b0110: calc_even_parity = ^temp_frame[6:1];  // Even: XOR of all bits
+            4'b0111: calc_even_parity = ^temp_frame[7:1];  // Even: XOR of all bits
+            4'b1000: calc_even_parity = ^temp_frame[8:1];  // Even: XOR of all bits
+            4'b1001: calc_even_parity = ^temp_frame[9:1];  // Even: XOR of all bits
+            default: calc_even_parity = ^temp_frame[8:1];  // Even: XOR of all bits
+        endcase
+        calc_odd_parity = ~calc_even_parity;   // Odd: NOT of even parity
+    end
+    
 
     // Check parity based on configuration
     always @(*) begin

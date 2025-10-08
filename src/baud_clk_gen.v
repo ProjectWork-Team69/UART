@@ -11,12 +11,8 @@ module baud_clk_gen(
     input wire          tx_idle,
     
     output reg          baud_clk_tx,
-    output reg          baud_clk_rx,
-    output wire [15:0]  rx_baud_divisor,
-    output wire [15:0]  tx_baud_divisor
+    output wire [15:0]  rx_baud_divisor
     
-    // I need handshake signals here valid and ready
-    // Not sure
     );
     
     // internal divisior reg for RX to update when rx is ready or in idle state
@@ -83,23 +79,6 @@ module baud_clk_gen(
     end
     
     // generation of clock
-    
-    // RX baud clock
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            rx_counter <= 16'b0;
-            baud_clk_rx <= 1'b0;
-        end
-        else begin
-            if (rx_counter == 16'b0 || rx_divisor_changed) begin
-                rx_counter <= (rx_divisor >> 1) - 16'b1;
-                baud_clk_rx <= ~baud_clk_rx;  // toggle 
-            end else begin
-                rx_counter <= rx_counter - 16'b1;
-            end
-        end
-    end
-    
     // TX baud clock
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -117,6 +96,5 @@ module baud_clk_gen(
     end
     
     assign rx_baud_divisor = rx_divisor;
-    assign tx_baud_divisor = tx_divisor;
     
 endmodule

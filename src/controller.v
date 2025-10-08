@@ -13,8 +13,8 @@ module controller(
 
         // outputs
         output reg          rx_ready,
-        output reg          rx_fifo_empty,
-        output reg          rx_fifo_full,
+        output wire         rx_fifo_empty,
+        output wire         rx_fifo_full,
     // TX interface
         // inputs
         input wire          tx_ready,
@@ -25,8 +25,8 @@ module controller(
         output reg          tx_start,
         output reg  [8:0]   tx_data,
         output reg          tx_valid,
-        output reg          tx_fifo_empty,
-        output reg          tx_fifo_full,
+        output wire         tx_fifo_empty,
+        output wire         tx_fifo_full,
 
     // AXI interface
         // inputs
@@ -47,11 +47,13 @@ module controller(
 
     // registers
     reg rx_fifo_wr_en, rx_fifo_rd_en;
-    reg [15:0] rx_fifo_wr_data, rx_fifo_rd_data;
+    reg [15:0] rx_fifo_wr_data;
     reg tx_fifo_wr_en, tx_fifo_rd_en;
-    reg [15:0] tx_fifo_wr_data, tx_fifo_rd_data;
+    reg [15:0] tx_fifo_wr_data;
     // wires
-
+    wire [15:0] rx_fifo_rd_data;
+    wire [15:0] tx_fifo_rd_data;
+    
     // FIFO instantiation
     // RX FIFO
     sync_fifo #(
